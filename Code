@@ -1,0 +1,180 @@
+#include <AFMotor.h>
+#include <LiquidCrystal.h>
+#include <SoftwareSerial.h>
+
+const int rs = 24, en = 25, d4 = 26, d5 = 27, d6 = 28, d7 = 29;
+const int rs_2 = 30, en_2 = 31, d4_2 = 32,d5_2 = 33, d6_2 = 34, d7_2 = 35;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+LiquidCrystal lcd_2(rs_2, en_2, d4_2, d5_2, d6_2, d7_2);
+
+int pir1 = 22;
+int pir2 = 23;
+int bullets = 20;
+#define trigpin = 8;
+#define echopin = 9;
+//DUALSHOCK3 CONTROLLED GRIPPER BOT
+#include <PS3BT.h>
+#include <usbhub.h>
+#include <Servo.h>
+
+// Satisfy the IDE, which needs to see the include statment in the ino too.
+#ifdef dobogusinclude
+#include <spi4teensy3.h>
+#endif
+#include <SPI.h>
+
+AF_DCMotor motorXaxis(1);
+AF_DCMotor motorYaxis(2);
+AF_DCMotor motorTrigger(3);
+
+
+USB Usb;
+//USBHub Hub1(&Usb); // Some dongles have a hub inside
+
+BTD Btd(&Usb); // You have to create the Bluetooth Dongle instance like so
+/* You can create the instance of the class in two ways */
+//PS3BT PS3(&Btd); // This will just create the instance
+PS3BT PS3(&Btd, 0x00, 0x15, 0x83, 0x3D, 0x0A, 0x57); // This will also store the bluetooth address - this can be obtained from the dongle when running the sketch
+
+bool printTemperature, printAngle;
+
+void setup() {
+  lcd.begin(16,2);
+  lcd_2.begin(16,2);
+  Serial.begin(9600);
+  pinMode(pir1,INPUT);
+  pinMode(pir2,INPUT);
+#if !defined(__MIPSEL__)
+  while (!Serial); // Wait for serial port to connect - used on Leonardo, Teensy and other boards with built-in USB CDC serial connection
+#endif
+  if (Usb.Init() == -1) {
+    Serial.print(F("\r\nOSC did not start"));
+    while (1); //halt
+  }
+  Serial.print(F("\r\nPS3 Bluetooth Library Started"));
+  motorXaxis.setSpeed(255);//gun left-right
+  motorYaxis.setSpeed(255);//gun up-down
+  motorTrigger.setSpeed(255); //trigger
+
+  delay(5000);
+}
+void loop() {
+  Usb.Task();
+  if (PS3.PS3Connected || PS3.PS3NavigationConnected) {
+
+    if(PS3.getAnalogButton(L1)){
+      lcd.print("MANUAL MODE ON");
+      while(PS3.getAnalogButton(L2) != 255)
+      {
+        manual();
+      }
+  }
+  if(PS3.getAnalogButton(circle)){
+    lcd.print("RAMPAGE MODE ON");
+    while(PS3.getAnalogButton(UP))
+    {
+      Rampage();
+    }
+}
+}
+
+
+
+void manual()
+{
+  //stop left-right movement
+     if(PS3.getAnalogHat(LeftHatX) > 120 && PS3.getAnalogHat(LeftHatX) < 130){
+      Serial.print(F("\r\nLeftHatX:STOP STOP"));
+      Serial.print(PS3.getAnalogHat(LeftHatX));
+      motorYaxis.run(RELEASE);
+      motorXaxis.run(RELEASE);
+      motorTrigger.run(RELEASE);
+    }
+    //stop up-down movement
+    if(PS3.getAnalogHat(RightHatY) > 120 && PS3.getAnalogHat(RighttHatY) < 130){
+      Serial.print(F("\r\nRightHatY:STOP STOP"));
+      Serial.print(PS3.getAnalogHat(RightHatY));
+      motorYaxis.run(RELEASE);
+      motorXaxis.run(RELEASE);
+      motorTrigger.run(RELEASE);
+    }
+    
+    //TURN LEFT
+    if (PS3.getAnalogHat(LeftHatX) == 0) {
+      Serial.print(F("\r\nLeftHatX:TURN LEFT "));
+      Serial.print(PS3.getAnalogHat(LeftHatX));
+      motorYaxis.run(RELEASE);
+      motorXaxis.run(BACKWARD);
+      motorTrigger.run(RELEASE);
+    }
+
+    //TURN RIGHT
+    if (PS3.getAnalogHat(LeftHatX) == 255) {
+      Serial.print(F("\r\nLeftHatX: TURN RIGHT "));
+      Serial.print(PS3.getAnalogHat(LeftHatX));
+      motorYaxis.run(RELEASE);
+      motorXaxis.run(FORWARD);
+      motorTrigger.run(RELEASE);
+    }
+
+    //GO UP
+    if (PS3.getAnalogHat(RightHatY) == 0) {
+      Serial.print(F("\r\RightHatY: GO UP "));
+      Serial.print(PS3.getAnalogHat(RightHatY));
+      motorYaxis.run(FORWARD);
+      motorXaxis.run(RELEASE);
+      motorTrigger.run(RELEASE);
+
+    }
+
+    //GO DOWN
+    if (PS3.getAnalogHat(RightHatY) == 255) {
+      Serial.print(F("\r\RightHatX; GO DOWN"));
+      Serial.print(PS3.getAnalogHat(RightHatY));
+      motorYaxis.run(BACKWARD);
+      motorXaxis.run(RELEASE);
+      motorTrigger.run(RELEASE);
+      
+    }
+
+    //GUNNED DOWN
+    if(PS3.getAnalogButton(R2)){
+      Serial.print(F("\r\nR2:DOWN "));
+      Serial.print(PS3.getAnalogButton(R2));
+      motorXaxis.run(RELEASE);
+      motorYaxis.run(RELEASE);
+      motorTrigger.run(FORWARD);
+      delay(200);
+      motorTrigger.run(RELEASE);
+      lcd_2.print(bullets);
+      bullets = bullets - 1;
+    }
+    
+}
+}
+
+void Rampage()
+{
+  if(digitalRead(pir1) == HIGH && digitalRead(pir2) == HIGH){
+    while(bullets > 10){
+    motorXaxis.run(FORWARD);
+    motorYaxis.run(RELEASE);
+    motorTrigger.run(RELEASE);
+    delay(200);
+    motorTrigger.run(RELEASE);
+    lcd_2.print(bullets);
+    bullets = bullets - 1;
+    }
+    while(bullets > 0)
+    {
+    motorXaxis.run(BACWARD);
+    motorYaxis.run(RELEASE);
+    motorTrigger.run(RELEASE);
+    delay(200);
+    motorTrigger.run(RELASE);
+    lcd_2.print(bullets);
+    bullets = bullets - 1;
+    }
+    delay(100);
+}    
+}
